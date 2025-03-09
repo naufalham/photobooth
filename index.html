@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ham Photobooth</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        #container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        .video-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        video {
+            width: 400px;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        select {
+            margin: 10px 0;
+            padding: 8px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        #countdown {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 28px;
+            font-weight: bold;
+            color: white;
+            background: rgba(255, 0, 0, 0.8);
+            padding: 8px 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        canvas {
+            width: 320px;
+            height: 800px;
+            background: white;
+            border: 10px solid #ddd;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        button {
+            margin-top: 15px;
+            padding: 12px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: 0.3s;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        input[type="color"] {
+            width: 50px;
+            height: 30px;
+            border: none;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            #container {
+                flex-direction: column;
+                align-items: center;
+                gap: 20px;
+            }
+            video {
+                width: 90%;
+            }
+            canvas {
+                width: 90%;
+                height: auto;
+            }
+            button {
+                width: 80%;
+                font-size: 16px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+<h1>Hamm Photobooth</h1>
+<div id="container">
+    <div class="video-container">
+        <span id="countdown">10</span>
+        <video id="video" autoplay></video>
+        <select id="cameraSelect"></select>
+        <div class="controls">
+            <button id="capture">Ambil Foto</button>
+            <button id="reset">Reset</button>
+            <button id="download">Download Foto</button>
+            <input type="color" id="colorPicker" value="#ffffff">
+        </div>
+    </div>
+    <canvas id="photoboothCanvas"></canvas>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const countdown = document.getElementById('countdown');
+    const buttonCapture = document.getElementById('capture');
+    const buttonDownload = document.getElementById('download');
+    const buttonReset = document.getElementById('reset');
+    const canvas = document.getElementById('photoboothCanvas');
+    const ctx = canvas.getContext('2d');
+    const colorPicker = document.getElementById('colorPicker');
+    const cameraSelect = document.getElementById('cameraSelect');
+
+    // **Perbaikan ukuran canvas**
+    canvas.width = 320;
+    canvas.height = 800; 
+
+    let photoCount = 0;
+    const maxPhotos = 3;
+    let photoSpacing = 20; 
+    let photoWidth = canvas.width - 40; 
+    let photoHeight;
+
+    // **Ganti warna canvas sesuai pilihan user**
+    // colorPicker.addEventListener("input", () => {
+    //     ctx.fillStyle = colorPicker.value;
+    //     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // });
+
+    // **Dapatkan daftar kamera**
+    async function getCameras() {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+            cameraSelect.innerHTML = ""; 
+            videoDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `Camera ${index + 1}`;
+                cameraSelect.appendChild(option);
+            });
+
+            if (videoDevices.length > 0) {
+                startCamera(videoDevices[0].deviceId);
+            }
+        } catch (error) {
+            console.error("Gagal mendapatkan kamera:", error);
+        }
+    }
+
+    // **Memulai kamera berdasarkan pilihan user**
+    async function startCamera(deviceId) {
+        try {
+            const constraints = {
+                video: {
+                    deviceId: deviceId ? { exact: deviceId } : undefined
+                }
+            };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+        } catch (error) {
+            console.error("Akses kamera gagal:", error);
+        }
+    }
+
+    // **Ganti kamera jika user memilih kamera lain**
+    cameraSelect.addEventListener("change", () => {
+        startCamera(cameraSelect.value);
+    });
+
+    // **Fungsi untuk mengambil foto dengan countdown**
+    function capturePhoto() {
+        if (photoCount >= maxPhotos) {
+            alert("Photobooth sudah penuh!");
+            return;
+        }
+
+        let timeLeft = 5;
+        countdown.style.display = "block";
+        countdown.innerText = timeLeft;
+
+        const timer = setInterval(() => {
+            timeLeft--;
+            countdown.innerText = timeLeft;
+
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                countdown.style.display = "none";
+
+                const aspectRatio = video.videoWidth / video.videoHeight;
+                photoHeight = photoWidth / aspectRatio; 
+
+                let startY = 20 + photoCount * (photoHeight + photoSpacing);
+
+                ctx.drawImage(video, 20, startY, photoWidth, photoHeight);
+                photoCount++;
+
+                if (photoCount < maxPhotos) {
+                    setTimeout(capturePhoto, 1000);
+                } else {
+                    drawPhotoboothFrame();
+                }
+            }
+        }, 1000);
+    }
+
+    // **Fungsi untuk menambahkan teks di bawah**
+    function drawPhotoboothFrame() {
+        ctx.fillStyle = "black";
+        ctx.font = "bold 20px Arial";
+        ctx.textAlign = "center";
+
+        let textY = canvas.height - 50;
+        ctx.fillText("BACK TO", canvas.width / 2, textY);
+        ctx.fillText("HAM OFFICE", canvas.width / 2, textY + 25);
+    }
+
+    // **Event listener untuk tombol capture**
+    buttonCapture.addEventListener('click', () => {
+        if (photoCount === 0) {
+            ctx.fillStyle = colorPicker.value;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        capturePhoto();
+    });
+
+    // **Event listener untuk tombol download**
+    buttonDownload.addEventListener("click", () => {
+        const link = document.createElement("a");
+        link.download = "photobooth.png";
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    });
+
+    // **Tombol Reset untuk menghapus foto**
+    buttonReset.addEventListener("click", () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height); 
+        photoCount = 0; 
+    });
+
+    // **Mulai dengan mendapatkan daftar kamera**
+    getCameras();
+</script>
+
+</body>
+</html>
